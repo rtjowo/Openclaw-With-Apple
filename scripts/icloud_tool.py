@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """
-Apple iCloud 命令行工具
+Apple iCloud 命令行工具（非交互式，适配 AI 环境）
 
 认证优先级：
-  1. 优先尝试 session 缓存（免密，由 icloud_auth.py login 生成）
+  1. 优先尝试 session 缓存（免密，由之前登录生成）
   2. session 不可用时，使用环境变量 ICLOUD_USERNAME + ICLOUD_PASSWORD 登录
-  3. 环境变量也没有时，交互式输入
+  3. 如需 2FA，打印提示并退出（退出码 2），等用户提供验证码后用 verify 命令完成
 
-用法: python icloud_tool.py [photos|drive|devices] [子命令]
+用法:
+  python icloud_tool.py login                # 登录（如需2FA会提示并退出）
+  python icloud_tool.py verify <6位验证码>    # 输入2FA验证码完成登录
+  python icloud_tool.py [photos|drive|devices] [子命令]
 
 环境变量:
   ICLOUD_USERNAME  - Apple ID
-  ICLOUD_PASSWORD  - 主密码 (非应用专用密码，session 不可用时的 fallback)
+  ICLOUD_PASSWORD  - 主密码 (非应用专用密码)
   ICLOUD_CHINA     - 设为 1 表示中国大陆用户（默认 1）
 """
 
@@ -39,13 +42,20 @@ except ImportError:
     HAS_AUTH_MODULE = False
 
 
-def get_api():
-    """连接 iCloud — 优先 session，fallback 到密码"""
+def get_api(require_password=False):
+    """
+    连接 iCloud — 优先 session，fallback 到密码。
+    全程非交互式，所有输入通过环境变量或命令行参数。
+
+    参数:
+      require_password: True 时跳过 session 缓存，直接用密码登录（用于 login 命令）
+    """
     china = os.environ.get('icloud_china') == '1'
     username = os.environ.get('ICLOUD_USERNAME')
+    password = os.environ.get('ICLOUD_PASSWORD')
 
     # 方式 1：尝试 session 缓存（免密）
-    if HAS_AUTH_MODULE:
+    if not require_password and HAS_AUTH_MODULE:
         if username:
             api, error = try_restore_session(username, china_mainland=china)
         else:
@@ -60,34 +70,87 @@ def get_api():
             return api
 
     # 方式 2：通过密码登录
-    password = os.environ.get('ICLOUD_PASSWORD')
-
     if not username:
-        username = input("Apple ID: ")
+        print("❌ 未设置 ICLOUD_USERNAME 环境变量")
+        sys.exit(1)
     if not password:
-        password = input("密码 (主密码，非应用专用密码): ")
+        print("❌ 未设置 ICLOUD_PASSWORD 环境变量")
+        sys.exit(1)
 
     print(f'🍎 正在连接 iCloud{"(中国大陆)" if china else ""}...')
 
     api = PyiCloudService(username, password, china_mainland=china)
 
     if api.requires_2fa:
-        print("\n🔐 需要双重认证")
-        print("请查看 iPhone/iPad/Mac 上的验证码弹窗")
-        code = input("请输入 6 位验证码: ")
-
-        if not api.validate_2fa_code(code):
-            print("❌ 验证失败!")
-            sys.exit(1)
-
-        print("✅ 验证成功!")
-
-        # 信任会话
-        if not api.is_trusted_session:
-            api.trust_session()
+        print("\n🔐 需要双重认证！")
+        print("请查看 iPhone/iPad/Mac 上的 6 位验证码弹窗，然后运行：")
+        print(f"  python icloud_tool.py verify <6位验证码>")
+        sys.exit(2)
 
     print("✅ 已连接!\n")
     return api
+
+
+def cmd_login():
+    """登录命令 — 通过环境变量登录，如需2FA则提示并退出"""
+    api = get_api(require_password=True)
+    # 如果走到这里说明不需要 2FA，直接成功
+    try:
+        devices = list(api.devices)
+        print(f"📱 检测到 {len(devices)} 个设备")
+        for d in devices:
+            print(f'  - {d}')
+    except Exception:
+        pass
+    print("\n✅ 登录成功，session 已缓存。")
+
+
+def cmd_verify(args):
+    """验证2FA验证码 — 完成登录"""
+    if not args:
+        print("用法: python icloud_tool.py verify <6位验证码>")
+        sys.exit(1)
+
+    code = args[0].strip()
+    if len(code) != 6 or not code.isdigit():
+        print(f"❌ 验证码格式错误: '{code}'，需要 6 位数字")
+        sys.exit(1)
+
+    china = os.environ.get('icloud_china') == '1'
+    username = os.environ.get('ICLOUD_USERNAME')
+    password = os.environ.get('ICLOUD_PASSWORD')
+
+    if not username or not password:
+        print("❌ 未设置 ICLOUD_USERNAME 和 ICLOUD_PASSWORD 环境变量")
+        sys.exit(1)
+
+    print(f'🍎 正在连接 iCloud{"(中国大陆)" if china else ""}...')
+    api = PyiCloudService(username, password, china_mainland=china)
+
+    if not api.requires_2fa:
+        print("✅ 不需要双重认证，已直接连接!")
+        return
+
+    print(f"🔐 正在验证: {code}")
+    if not api.validate_2fa_code(code):
+        print("❌ 验证码错误!")
+        sys.exit(1)
+
+    print("✅ 验证成功!")
+
+    if not api.is_trusted_session:
+        api.trust_session()
+        print("✅ 已信任此设备会话")
+
+    try:
+        devices = list(api.devices)
+        print(f"\n📱 检测到 {len(devices)} 个设备:")
+        for d in devices:
+            print(f'  - {d}')
+    except Exception:
+        pass
+
+    print("\n✅ 登录完成，session 已缓存。后续操作无需再输入密码。")
 
 
 def cmd_photos(api, args):
@@ -172,11 +235,15 @@ def cmd_devices(api, args):
 def show_help():
     """显示帮助"""
     print("""
-🍎 Apple iCloud 命令行工具
+🍎 Apple iCloud 命令行工具（非交互式，适配 AI 环境）
 
 用法: python icloud_tool.py <命令> [参数]
 
-命令:
+认证命令:
+  login                  登录（如需2FA会提示并退出，退出码 2）
+  verify <验证码>         输入 6 位 2FA 验证码完成登录
+
+功能命令:
   photos                 照片功能
     albums               列出所有相册
     list [N]             列出最近 N 张照片 (默认 10)
@@ -189,9 +256,8 @@ def show_help():
   devices                列出所有设备
 
 认证方式 (按优先级):
-  1. 已缓存的 session（运行过 icloud_auth.py login）
+  1. 已缓存的 session
   2. 环境变量 ICLOUD_USERNAME + ICLOUD_PASSWORD
-  3. 交互式输入
 
 环境变量:
   ICLOUD_USERNAME        Apple ID 邮箱
@@ -208,6 +274,15 @@ def main():
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
+    # 认证命令（不需要先 get_api）
+    if cmd == 'login':
+        cmd_login()
+        return
+    elif cmd == 'verify':
+        cmd_verify(args)
+        return
+
+    # 功能命令（需要先连接）
     api = get_api()
 
     if cmd == 'photos':

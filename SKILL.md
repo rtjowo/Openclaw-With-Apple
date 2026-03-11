@@ -60,16 +60,28 @@ python icloud_calendar.py list    # 验证日历
 
 #### 用户提供了邮箱 + 主密码：
 
-AI 直接通过环境变量设置凭证并登录，**不走交互式流程**：
+AI 直接通过环境变量设置凭证并登录，**全程非交互式**：
 
 ```bash
 export ICLOUD_USERNAME="用户提供的邮箱"
 export ICLOUD_PASSWORD="用户提供的主密码"
-python icloud_tool.py devices     # 触发登录并验证
+python icloud_tool.py login       # 第一步：尝试登录
 ```
 
-> 首次登录会触发双重认证。AI 提示用户查看 iPhone 上的 6 位验证码，
-> 用户把验证码发给 AI，AI 输入验证码完成认证。
+脚本会自动判断是否需要双重认证：
+- **不需要 2FA** → 直接登录成功，进入第二步
+- **需要 2FA**（退出码 2）→ AI 立刻告知用户：
+
+```
+你的 iPhone 上应该收到了一个 6 位验证码弹窗，把验证码发给我。
+```
+
+用户发来验证码后，AI 执行：
+
+```bash
+python icloud_tool.py verify 123456    # 用验证码完成登录
+```
+
 > 认证成功后 session 会被缓存到 `~/.pyicloud/`，后续使用不再需要密码。
 
 验证成功后，进入第二步。
@@ -169,8 +181,8 @@ iPhone →「设置」→「快捷指令」→「高级」→ 开启「允许共
 ### iCloud 相关
 
 1. 用户提到日历、照片、文件、设备时，直接调用对应工具执行
-2. iCloud session 过期时，AI 自动使用已保存的 `ICLOUD_USERNAME` + `ICLOUD_PASSWORD` 环境变量重新登录，无需用户手动操作
-3. 如需双重认证，提示用户发送验证码，AI 输入后完成认证
+2. iCloud session 过期时，告知用户 session 已过期，询问是否重新登录
+3. 用户同意后，运行 `python icloud_tool.py login`，如需 2FA 则让用户发验证码，再运行 `python icloud_tool.py verify <验证码>`
 
 ---
 
@@ -216,10 +228,11 @@ python icloud_calendar.py delete 开会
 #### Session 管理
 
 ```bash
-# AI 自动登录（通过环境变量，不走交互式）
+# 登录（通过环境变量，非交互式）
 export ICLOUD_USERNAME="邮箱"
 export ICLOUD_PASSWORD="主密码"
-python icloud_tool.py devices    # 触发登录
+python icloud_tool.py login          # 尝试登录（如需2FA退出码为2）
+python icloud_tool.py verify 123456  # 用2FA验证码完成登录
 
 # Session 状态管理
 python icloud_auth.py status     # 检查 session
