@@ -5,11 +5,16 @@
 无法用纯 Python 方便地生成。这个脚本输出详细的手动创建步骤。
 
 快捷指令功能:
-  1. 从 iCloud Drive/Shortcuts/Tasks/ 读取 tasks_sync.json
+  1. 从 iCloud Drive/Shortcuts/Tasks/ 读取 tasks_latest.json
   2. 解析 JSON 中的每个任务
   3. target=reminder → 创建提醒事项（含日期、时间、优先级）
   4. target=note → 创建备忘录
-  5. 导入完成后删除源文件（防止重复导入）
+  5. 导入完成后只删 tasks_latest.json（日期归档文件 tasks_YYYY-MM-DD.json 保留）
+
+文件机制:
+  OpenClaw 每天上传两个文件:
+  - tasks_2026-03-11.json  ← 归档，永久保留
+  - tasks_latest.json      ← 快捷指令读这个，导入后删除
 """
 
 def main():
@@ -17,6 +22,12 @@ def main():
 ╔══════════════════════════════════════════════════════════════╗
 ║          📱 Tasks Import 快捷指令 — 创建指南               ║
 ╚══════════════════════════════════════════════════════════════╝
+
+📁 iCloud Drive/Shortcuts/Tasks/ 目录中的文件:
+   tasks_latest.json       ← 快捷指令读取这个（导入后自动删除）
+   tasks_2026-03-10.json   ← 归档，永久保留不动
+   tasks_2026-03-11.json   ← 归档，永久保留不动
+   ...
 
 在 iPhone 上打开「快捷指令」App，点击右上角 + 创建新指令，
 按以下步骤依次添加操作：
@@ -26,9 +37,11 @@ def main():
 步骤 1: 获取文件
 ━━━━━━━━━━━━━━━
   操作: 「获取文件」(Get File)
-  文件路径: /Shortcuts/Tasks/tasks_sync.json
+  文件路径: /Shortcuts/Tasks/tasks_latest.json
   ☑️ 打开「仅 iCloud Drive」
   ❌ 关闭「显示文件选择器」
+
+  💡 只读 tasks_latest.json，不碰 tasks_YYYY-MM-DD.json 归档文件
 
 步骤 2: 获取文件内容
 ━━━━━━━━━━━━━━━━━━
@@ -95,11 +108,14 @@ def main():
   │                                                     │
   └─── 结束循环 ───────────────────────────────────────┘
 
-步骤 6: 删除源文件（防止重复导入）
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+步骤 6: 删除 tasks_latest.json（仅删这个，归档文件不动）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   操作: 「删除文件」(Delete Files)
-  文件: 步骤 1 的输出（tasks_sync.json）
+  文件: 步骤 1 的输出（tasks_latest.json）
   ❌ 关闭「确认删除」
+
+  ⚠️ 这只会删除 tasks_latest.json
+     tasks_2026-03-11.json 等归档文件会永久保留在 iCloud Drive 中
 
 步骤 7: 显示通知
 ━━━━━━━━━━━━━━━
@@ -127,18 +143,33 @@ def main():
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
   如果你觉得手动创建太麻烦，也可以创建一个简化版:
 
-  1. 「获取文件」→ /Shortcuts/Tasks/tasks_sync.json
+  1. 「获取文件」→ /Shortcuts/Tasks/tasks_latest.json
   2. 「获取文件中的文本」
   3. 「从输入中获取词典」
   4. 「获取词典值」键: tasks
   5. 「针对每一项重复」
      → 「获取词典值」键: title
      → 「添加新提醒事项」标题设为上一步结果
-  6. 「删除文件」
+  6. 「删除文件」（只删 tasks_latest.json，归档自动保留）
   7. 「显示通知」
 
   这个简化版把所有任务都加到提醒事项（不区分备忘录），
   不设日期和优先级，但创建过程只需 2 分钟。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📦 归档机制说明:
+━━━━━━━━━━━━━━━
+  每天 22:00 OpenClaw 上传两个文件:
+
+  tasks_latest.json        ← 快捷指令读取并删除（防重复导入）
+  tasks_2026-03-11.json    ← 永久归档，方便你以后回看历史待办
+
+  iCloud Drive/Shortcuts/Tasks/ 目录随时间积累:
+    tasks_2026-03-10.json
+    tasks_2026-03-11.json
+    tasks_2026-03-12.json
+    ...（每天一个，永不覆盖）
 
 """
     print(guide)

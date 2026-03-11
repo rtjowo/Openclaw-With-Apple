@@ -393,39 +393,73 @@ def _ensure_icloud_dir(drive):
 
 
 def _sync_upload(drive):
-    """上传本地 tasks.json 到 iCloud Drive。"""
+    """上传本地 tasks.json 到 iCloud Drive（按日期归档，不覆盖历史）。
+
+    每次上传生成两个文件：
+    1. tasks_YYYY-MM-DD.json  — 当天的待办快照（历史永久保留）
+    2. tasks_latest.json      — 固定文件名，内容与当天相同（供快捷指令读取）
+
+    iPhone 快捷指令只需读 tasks_latest.json，导入后删除它。
+    tasks_YYYY-MM-DD.json 作为历史归档永久保留在 iCloud Drive 中。
+    """
     data = _load_tasks()
 
-    # 只上传 pending 的任务（已完成的不需要发到 iPhone）
+    # 只上传 pending 的任务
+    today_str = datetime.now().strftime("%Y-%m-%d")
     sync_data = {
         "updated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "date": today_str,
         "synced_from": "openclaw",
         "tasks": [t for t in data["tasks"] if t.get("status") != "done"],
     }
 
-    # 写到临时文件再上传
-    tmp_file = os.path.join(TASKS_DIR, "tasks_sync.json")
-    with open(tmp_file, "w", encoding="utf-8") as f:
-        json.dump(sync_data, f, ensure_ascii=False, indent=2)
+    task_count = len(sync_data["tasks"])
+    if task_count == 0:
+        print("📋 没有待处理的待办，跳过同步")
+        return
 
+    target_folder = drive["Shortcuts"]["Tasks"]
+
+    # 1. 上传日期归档文件: tasks_2026-03-11.json
+    archive_filename = f"tasks_{today_str}.json"
+    tmp_archive = os.path.join(TASKS_DIR, archive_filename)
+    with open(tmp_archive, "w", encoding="utf-8") as f:
+        json.dump(sync_data, f, ensure_ascii=False, indent=2)
     try:
-        target_folder = drive["Shortcuts"]["Tasks"]
-        with open(tmp_file, "rb") as f:
+        with open(tmp_archive, "rb") as f:
             target_folder.upload(f)
-        task_count = len(sync_data["tasks"])
-        print(f"☁️  已同步 {task_count} 项待办到 iCloud Drive/Shortcuts/Tasks/tasks_sync.json")
-        print(f"   iPhone 快捷指令将在下次运行时读取")
+        print(f"📦 已归档: iCloud Drive/Shortcuts/Tasks/{archive_filename}")
     finally:
-        if os.path.exists(tmp_file):
-            os.remove(tmp_file)
+        if os.path.exists(tmp_archive):
+            os.remove(tmp_archive)
+
+    # 2. 上传最新指针文件: tasks_latest.json（固定名，供快捷指令读取）
+    tmp_latest = os.path.join(TASKS_DIR, "tasks_latest.json")
+    with open(tmp_latest, "w", encoding="utf-8") as f:
+        json.dump(sync_data, f, ensure_ascii=False, indent=2)
+    try:
+        with open(tmp_latest, "rb") as f:
+            target_folder.upload(f)
+        print(f"☁️  已同步 {task_count} 项待办 → iCloud Drive/Shortcuts/Tasks/tasks_latest.json")
+        print(f"   iPhone 快捷指令将在下次运行时读取 tasks_latest.json")
+        print(f"   历史归档 {archive_filename} 已保留，不会被覆盖")
+    finally:
+        if os.path.exists(tmp_latest):
+            os.remove(tmp_latest)
 
 
 def _sync_download(drive):
-    """从 iCloud Drive 下载 tasks.json 覆盖本地。"""
+    """从 iCloud Drive 下载最新的待办文件合并到本地。"""
     try:
         target_folder = drive["Shortcuts"]["Tasks"]
-        # 尝试几种可能的文件名
-        for name in ("tasks_sync.json", "tasks.json"):
+        # 优先读 tasks_latest.json，其次按日期文件名
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        candidates = [
+            "tasks_latest.json",
+            f"tasks_{today_str}.json",
+            "tasks_sync.json",  # 兼容旧格式
+        ]
+        for name in candidates:
             try:
                 node = target_folder[name]
                 response = node.open(stream=True)
