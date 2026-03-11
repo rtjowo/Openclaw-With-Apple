@@ -204,16 +204,29 @@ python icloud_tool.py photos download 1
 python icloud_tool.py drive list                      # 列出根目录
 python icloud_tool.py drive list Work/Projects        # 列出多级目录
 python icloud_tool.py drive cd Downloads              # 进入并列出文件夹
-python icloud_tool.py drive download Work/doc.pdf     # 下载文件到当前目录
+python icloud_tool.py drive download Work/doc.pdf     # 下载文件
 python icloud_tool.py drive download Work/doc.pdf ~/Desktop/doc.pdf  # 下载到指定路径
 python icloud_tool.py drive cat Work/notes.txt        # 查看文本文件内容
-python icloud_tool.py drive upload local.pdf Work     # 上传文件到指定文件夹
+python icloud_tool.py drive upload local.pdf Work     # 上传文件
+python icloud_tool.py drive mkdir Work/新项目          # 创建文件夹
+python icloud_tool.py drive rename Work/旧名 新名      # 重命名
+python icloud_tool.py drive delete Work/废弃文件.txt    # 删除文件/文件夹
 ```
 
-#### 查找设备
+#### 设备列表
 
 ```bash
-python icloud_tool.py devices
+python icloud_tool.py devices                         # 列出所有设备（型号、电量、状态）
+```
+
+#### 查找设备 (Find My)
+
+```bash
+python icloud_tool.py find locate                     # 定位默认设备(iPhone)
+python icloud_tool.py find locate iPad                # 定位指定设备
+python icloud_tool.py find status                     # 设备详细状态（电量、充电、位置）
+python icloud_tool.py find play                       # 播放声音（找手机）
+python icloud_tool.py find lost 13800138000 "请归还"   # 启用丢失模式
 ```
 
 #### 日历 (CalDAV)

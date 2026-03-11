@@ -10,7 +10,7 @@ Apple iCloud 命令行工具（非交互式，适配 AI 环境）
 用法:
   python icloud_tool.py login                # 登录（如需2FA会提示并退出）
   python icloud_tool.py verify <6位验证码>    # 输入2FA验证码完成登录
-  python icloud_tool.py [photos|drive|devices] [子命令]
+  python icloud_tool.py [photos|drive|devices|find] [子命令]
 
 环境变量:
   ICLOUD_USERNAME  - Apple ID
@@ -20,6 +20,8 @@ Apple iCloud 命令行工具（非交互式，适配 AI 环境）
 
 import sys
 import os
+import json
+from datetime import datetime
 
 # 中国大陆用户设置
 if os.environ.get('ICLOUD_CHINA', '1') == '1':
@@ -42,19 +44,14 @@ except ImportError:
     HAS_AUTH_MODULE = False
 
 
-def get_api(require_password=False):
-    """
-    连接 iCloud — 优先 session，fallback 到密码。
-    全程非交互式，所有输入通过环境变量或命令行参数。
+# ─── 认证 ─────────────────────────────────────────────
 
-    参数:
-      require_password: True 时跳过 session 缓存，直接用密码登录（用于 login 命令）
-    """
+def get_api(require_password=False):
+    """连接 iCloud — 优先 session，fallback 到密码。全程非交互式。"""
     china = os.environ.get('icloud_china') == '1'
     username = os.environ.get('ICLOUD_USERNAME')
     password = os.environ.get('ICLOUD_PASSWORD')
 
-    # 方式 1：尝试 session 缓存（免密）
     if not require_password and HAS_AUTH_MODULE:
         if username:
             api, error = try_restore_session(username, china_mainland=china)
@@ -64,12 +61,10 @@ def get_api(require_password=False):
                 return api
             except SystemExit:
                 api, error = None, "session 不可用"
-
         if api:
             print("✅ 通过缓存 session 连接成功\n")
             return api
 
-    # 方式 2：通过密码登录
     if not username:
         print("❌ 未设置 ICLOUD_USERNAME 环境变量")
         sys.exit(1)
@@ -78,7 +73,6 @@ def get_api(require_password=False):
         sys.exit(1)
 
     print(f'🍎 正在连接 iCloud{"(中国大陆)" if china else ""}...')
-
     api = PyiCloudService(username, password, china_mainland=china)
 
     if api.requires_2fa:
@@ -92,9 +86,8 @@ def get_api(require_password=False):
 
 
 def cmd_login():
-    """登录命令 — 通过环境变量登录，如需2FA则提示并退出"""
+    """登录命令"""
     api = get_api(require_password=True)
-    # 如果走到这里说明不需要 2FA，直接成功
     try:
         devices = list(api.devices)
         print(f"📱 检测到 {len(devices)} 个设备")
@@ -106,7 +99,7 @@ def cmd_login():
 
 
 def cmd_verify(args):
-    """验证2FA验证码 — 完成登录"""
+    """验证2FA验证码"""
     if not args:
         print("用法: python icloud_tool.py verify <6位验证码>")
         sys.exit(1)
@@ -137,7 +130,6 @@ def cmd_verify(args):
         sys.exit(1)
 
     print("✅ 验证成功!")
-
     if not api.is_trusted_session:
         api.trust_session()
         print("✅ 已信任此设备会话")
@@ -149,9 +141,10 @@ def cmd_verify(args):
             print(f'  - {d}')
     except Exception:
         pass
-
     print("\n✅ 登录完成，session 已缓存。后续操作无需再输入密码。")
 
+
+# ─── 照片 ─────────────────────────────────────────────
 
 def cmd_photos(api, args):
     """照片命令"""
@@ -195,11 +188,10 @@ def cmd_photos(api, args):
         print("可用: albums, list [N], download N")
 
 
+# ─── iCloud Drive ──────────────────────────────────────
+
 def _resolve_drive_path(drive, path_str):
-    """
-    解析 iCloud Drive 路径，支持 / 分隔的多级路径。
-    例如: "Work/Projects/doc.txt" → drive['Work']['Projects']['doc.txt']
-    """
+    """解析 iCloud Drive 路径，支持 / 分隔的多级路径。"""
     node = drive
     parts = [p for p in path_str.split('/') if p]
     for part in parts:
@@ -211,8 +203,19 @@ def _resolve_drive_path(drive, path_str):
     return node
 
 
+def _format_size(size_bytes):
+    """格式化文件大小"""
+    if size_bytes is None:
+        return ""
+    if size_bytes > 1024 * 1024:
+        return f"{size_bytes / 1024 / 1024:.1f} MB"
+    elif size_bytes > 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    return f"{size_bytes} B"
+
+
 def _list_node(node, label=""):
-    """列出一个 Drive 节点的内容"""
+    """列出 Drive 节点内容"""
     if label:
         print(f'📂 {label}:\n')
     else:
@@ -221,18 +224,14 @@ def _list_node(node, label=""):
     items = list(node.dir())
     for item_name in items:
         child = node[item_name]
-        # 判断是文件还是文件夹
-        if hasattr(child, 'dir') and callable(child.dir):
-            try:
-                child.dir()
-                print(f'  📂 {item_name}/')
-            except Exception:
-                # 是文件
-                size = getattr(child, 'size', None)
-                size_str = f" ({size:,} bytes)" if size else ""
-                print(f'  📄 {item_name}{size_str}')
+        # 用 type 属性判断（pyicloud DriveNode 有 type 属性: 'file' or 'folder'）
+        node_type = getattr(child, 'type', None)
+        if node_type == 'folder':
+            print(f'  📂 {item_name}/')
         else:
-            print(f'  📄 {item_name}')
+            size = getattr(child, 'size', None)
+            size_str = f"  ({_format_size(size)})" if size else ""
+            print(f'  📄 {item_name}{size_str}')
     print(f'\n共 {len(items)} 个项目')
 
 
@@ -242,7 +241,6 @@ def cmd_drive(api, args):
     drive = api.drive
 
     if not args or args[0] == 'list':
-        # list [路径]
         if len(args) > 1:
             path = args[1]
             node = _resolve_drive_path(drive, path)
@@ -259,107 +257,255 @@ def cmd_drive(api, args):
         path = args[1]
         node = _resolve_drive_path(drive, path)
         filename = path.split('/')[-1]
-
-        # 可选指定输出路径
         output = args[2] if len(args) > 2 else filename
 
         print(f'⬇️  正在下载: {path}')
         with node.open(stream=True) as response:
             with open(output, 'wb') as f:
                 copyfileobj(response.raw, f)
-
-        size = os.path.getsize(output)
-        if size > 1024 * 1024:
-            size_str = f"{size / 1024 / 1024:.1f} MB"
-        elif size > 1024:
-            size_str = f"{size / 1024:.1f} KB"
-        else:
-            size_str = f"{size} bytes"
-        print(f'✅ 已保存: {output} ({size_str})')
+        print(f'✅ 已保存: {output} ({_format_size(os.path.getsize(output))})')
 
     elif args[0] == 'cat' and len(args) > 1:
         path = args[1]
         node = _resolve_drive_path(drive, path)
-
         print(f'📄 {path}:\n')
         response = node.open()
-        # 尝试文本输出
         try:
             text = response.content.decode('utf-8')
             print(text)
         except UnicodeDecodeError:
-            print(f"⚠️ 文件不是文本格式，请用 download 命令下载")
+            print("⚠️ 文件不是文本格式，请用 download 命令下载")
 
     elif args[0] == 'upload' and len(args) > 1:
         local_file = args[1]
-        # 可选指定目标文件夹路径
         target_folder = args[2] if len(args) > 2 else None
-
         if not os.path.exists(local_file):
             print(f"❌ 本地文件不存在: {local_file}")
             return
-
-        if target_folder:
-            folder_node = _resolve_drive_path(drive, target_folder)
-        else:
-            folder_node = drive
-
+        folder_node = _resolve_drive_path(drive, target_folder) if target_folder else drive
         filename = os.path.basename(local_file)
-        print(f'⬆️  正在上传: {local_file} → iCloud Drive/{target_folder or ""}/{filename}')
-
+        print(f'⬆️  正在上传: {filename} → iCloud Drive/{target_folder or ""}')
         with open(local_file, 'rb') as f:
             folder_node.upload(f)
-
         print(f'✅ 上传完成: {filename}')
 
+    elif args[0] == 'mkdir' and len(args) > 1:
+        # mkdir Work/新文件夹 → 在 Work 下创建 "新文件夹"
+        path = args[1]
+        parts = [p for p in path.split('/') if p]
+        new_name = parts[-1]
+        parent_path = '/'.join(parts[:-1]) if len(parts) > 1 else None
+        parent = _resolve_drive_path(drive, parent_path) if parent_path else drive
+        parent.mkdir(new_name)
+        print(f'✅ 已创建文件夹: {path}')
+
+    elif args[0] == 'rename' and len(args) > 2:
+        path = args[1]
+        new_name = args[2]
+        node = _resolve_drive_path(drive, path)
+        node.rename(new_name)
+        print(f'✅ 已重命名: {path} → {new_name}')
+
+    elif args[0] == 'delete' and len(args) > 1:
+        path = args[1]
+        node = _resolve_drive_path(drive, path)
+        node.delete()
+        print(f'🗑️ 已删除: {path}')
+
     else:
-        print(f"未知子命令: {args[0] if args else '(空)'}")
-        print("可用: list [路径], cd <路径>, download <路径> [输出文件], cat <路径>, upload <本地文件> [目标文件夹]")
+        sub = args[0] if args else '(空)'
+        print(f"未知子命令: {sub}")
+        print("可用: list [路径], cd <路径>, download <路径> [输出], cat <路径>,")
+        print("      upload <本地文件> [目标文件夹], mkdir <路径>, rename <路径> <新名>, delete <路径>")
+
+
+# ─── 设备 / 查找 ───────────────────────────────────────
+
+def _get_device(api, identifier=None):
+    """获取设备。支持按编号(1-based)、名称片段、或设备ID"""
+    devices = list(api.devices)
+    if not devices:
+        print("❌ 没有找到任何设备")
+        sys.exit(1)
+
+    if identifier is None:
+        # 默认返回第一个 iPhone，找不到就返回第一个设备
+        for d in devices:
+            status = d.status()
+            if 'iPhone' in status.get('deviceDisplayName', ''):
+                return d
+        return devices[0]
+
+    # 按编号
+    if identifier.isdigit():
+        idx = int(identifier) - 1
+        if 0 <= idx < len(devices):
+            return devices[idx]
+        print(f"❌ 设备编号超出范围 (1-{len(devices)})")
+        sys.exit(1)
+
+    # 按名称片段匹配
+    for d in devices:
+        status = d.status()
+        name = status.get('name', '')
+        display = status.get('deviceDisplayName', '')
+        if identifier.lower() in name.lower() or identifier.lower() in display.lower():
+            return d
+
+    print(f"❌ 未找到匹配 '{identifier}' 的设备")
+    print("可用设备:")
+    for i, d in enumerate(devices):
+        s = d.status()
+        print(f"  {i+1}. {s.get('name', '?')} ({s.get('deviceDisplayName', '?')})")
+    sys.exit(1)
 
 
 def cmd_devices(api, args):
-    """设备命令"""
+    """设备列表 — 显示详细信息"""
     print('📱 我的设备:\n')
     devices = list(api.devices)
-    for d in devices:
-        print(f'  - {d}')
+    for i, d in enumerate(devices):
+        try:
+            s = d.status()
+            name = s.get('name', '未知')
+            model = s.get('deviceDisplayName', '?')
+            battery = s.get('batteryLevel')
+            battery_str = f"  🔋 {battery*100:.0f}%" if battery and battery > 0 else ""
+            status = s.get('deviceStatus', '?')
+            print(f'  {i+1}. {name} ({model}){battery_str}  [status: {status}]')
+        except Exception:
+            print(f'  {i+1}. {d}')
     print(f'\n共 {len(devices)} 个设备')
 
 
+def cmd_find(api, args):
+    """查找设备命令 — 定位、状态、播放声音、丢失模式"""
+    if not args:
+        print("用法: find <子命令> [设备]")
+        print("  locate [设备]          获取设备位置")
+        print("  status [设备]          获取设备详细状态")
+        print("  play [设备]            播放声音（找手机）")
+        print("  lost <电话> <消息> [设备]  启用丢失模式")
+        print("\n[设备] 可以是编号(1,2,3)、名称片段(iPhone)、或省略(默认 iPhone)")
+        return
+
+    subcmd = args[0]
+
+    if subcmd == 'locate':
+        device = _get_device(api, args[1] if len(args) > 1 else None)
+        s = device.status()
+        print(f'📍 正在定位: {s.get("name", "?")}...\n')
+        loc = device.location()
+        if loc:
+            lat = loc.get('latitude', '?')
+            lng = loc.get('longitude', '?')
+            acc = loc.get('horizontalAccuracy', '?')
+            pos_type = loc.get('positionType', '?')
+            ts = loc.get('timeStamp')
+            time_str = ""
+            if ts:
+                try:
+                    time_str = f"  ⏰ {datetime.fromtimestamp(ts / 1000).strftime('%Y-%m-%d %H:%M:%S')}"
+                except Exception:
+                    pass
+            print(f'  纬度: {lat}')
+            print(f'  经度: {lng}')
+            print(f'  精度: {acc}m ({pos_type}){time_str}')
+            print(f'\n  🗺️  地图: https://maps.apple.com/?ll={lat},{lng}')
+        else:
+            print("  ❌ 无法获取位置（设备可能离线）")
+
+    elif subcmd == 'status':
+        device = _get_device(api, args[1] if len(args) > 1 else None)
+        s = device.status()
+        print(f'📱 设备状态:\n')
+        print(f'  名称: {s.get("name", "?")}')
+        print(f'  型号: {s.get("deviceDisplayName", "?")}')
+        print(f'  类型: {s.get("deviceClass", "?")}')
+        battery = s.get('batteryLevel')
+        if battery and battery > 0:
+            print(f'  电量: {battery*100:.0f}%')
+        bat_status = s.get('batteryStatus', '')
+        if bat_status:
+            status_map = {'Charging': '充电中', 'NotCharging': '未充电', 'Charged': '已充满'}
+            print(f'  充电: {status_map.get(bat_status, bat_status)}')
+        print(f'  状态码: {s.get("deviceStatus", "?")}')
+        loc = device.location()
+        if loc and loc.get('latitude'):
+            old = "⚠️ 旧位置" if loc.get('isOld') else "最新"
+            print(f'  位置: {loc["latitude"]:.6f}, {loc["longitude"]:.6f} ({old})')
+
+    elif subcmd == 'play':
+        device = _get_device(api, args[1] if len(args) > 1 else None)
+        s = device.status()
+        name = s.get('name', '?')
+        print(f'🔊 正在向 {name} 发送声音...')
+        device.play_sound()
+        print(f'✅ 已发送！{name} 会响铃并显示通知。')
+
+    elif subcmd == 'lost':
+        if len(args) < 3:
+            print("用法: find lost <电话号码> <显示消息> [设备]")
+            print("  示例: find lost 13800138000 \"请联系我归还手机\"")
+            return
+        phone = args[1]
+        message = args[2]
+        device = _get_device(api, args[3] if len(args) > 3 else None)
+        s = device.status()
+        name = s.get('name', '?')
+        print(f'🔒 正在对 {name} 启用丢失模式...')
+        print(f'   联系电话: {phone}')
+        print(f'   显示消息: {message}')
+        device.lost_device(phone, message)
+        print(f'✅ 丢失模式已启用！设备会锁定并显示联系信息。')
+
+    else:
+        print(f"未知子命令: {subcmd}")
+        print("可用: locate, status, play, lost")
+
+
+# ─── 帮助 & 主入口 ─────────────────────────────────────
+
 def show_help():
-    """显示帮助"""
     print("""
 🍎 Apple iCloud 命令行工具（非交互式，适配 AI 环境）
 
 用法: python icloud_tool.py <命令> [参数]
 
-认证命令:
-  login                  登录（如需2FA会提示并退出，退出码 2）
-  verify <验证码>         输入 6 位 2FA 验证码完成登录
+认证:
+  login                      登录（如需2FA会提示并退出，退出码 2）
+  verify <验证码>             输入 6 位 2FA 验证码完成登录
 
-功能命令:
-  photos                 照片功能
-    albums               列出所有相册
-    list [N]             列出最近 N 张照片 (默认 10)
-    download N           下载第 N 张照片
+照片:
+  photos albums              列出所有相册
+  photos list [N]            列出最近 N 张照片 (默认 10)
+  photos download N          下载第 N 张照片
 
-  drive                  iCloud Drive 功能
-    list [路径]          列出目录内容（支持多级路径如 Work/Docs）
-    cd <路径>            进入并列出文件夹内容
-    download <路径> [输出] 下载文件到本地
-    cat <路径>           查看文本文件内容
-    upload <本地文件> [目标文件夹]  上传文件
+iCloud Drive:
+  drive list [路径]          列出目录（支持多级路径如 Work/Docs）
+  drive cd <路径>            进入并列出文件夹
+  drive download <路径> [输出]  下载文件
+  drive cat <路径>           查看文本文件内容
+  drive upload <本地文件> [目标]  上传文件
+  drive mkdir <路径>         创建文件夹
+  drive rename <路径> <新名>  重命名文件/文件夹
+  drive delete <路径>        删除文件/文件夹
 
-  devices                列出所有设备
+设备:
+  devices                    列出所有设备（含型号、电量）
 
-认证方式 (按优先级):
-  1. 已缓存的 session
-  2. 环境变量 ICLOUD_USERNAME + ICLOUD_PASSWORD
+查找设备 (Find My):
+  find locate [设备]         获取设备 GPS 位置
+  find status [设备]         获取设备详细状态
+  find play [设备]           播放声音（找手机）
+  find lost <电话> <消息> [设备]  启用丢失模式
+
+  [设备] = 编号(1,2,3) / 名称片段(iPhone) / 省略(默认iPhone)
 
 环境变量:
-  ICLOUD_USERNAME        Apple ID 邮箱
-  ICLOUD_PASSWORD        主密码 (不是应用专用密码)
-  ICLOUD_CHINA           设为 1 表示中国大陆 (默认 1)
+  ICLOUD_USERNAME            Apple ID 邮箱
+  ICLOUD_PASSWORD            主密码 (不是应用专用密码)
+  ICLOUD_CHINA               设为 1 表示中国大陆 (默认 1)
 """)
 
 
@@ -371,7 +517,6 @@ def main():
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
-    # 认证命令（不需要先 get_api）
     if cmd == 'login':
         cmd_login()
         return
@@ -379,7 +524,6 @@ def main():
         cmd_verify(args)
         return
 
-    # 功能命令（需要先连接）
     api = get_api()
 
     if cmd == 'photos':
@@ -388,6 +532,8 @@ def main():
         cmd_drive(api, args)
     elif cmd == 'devices':
         cmd_devices(api, args)
+    elif cmd == 'find':
+        cmd_find(api, args)
     else:
         print(f'❌ 未知命令: {cmd}')
         print('运行 python icloud_tool.py --help 查看帮助')
