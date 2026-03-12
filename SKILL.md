@@ -263,8 +263,14 @@ python scripts/generate_tasks_shortcut.py
 ### iCloud 相关
 
 1. 用户提到日历、照片、文件、设备时，直接调用对应工具执行
-2. iCloud session 过期时，告知用户 session 已过期，询问是否重新登录
-3. 用户同意后，运行 `python icloud_tool.py login`，如需 2FA 则让用户发验证码，再运行 `python icloud_tool.py verify <验证码>`
+2. **任何 iCloud 操作报错时，必须先运行 `python scripts/icloud_auth.py status` 检查 session 状态**
+3. 如果 session 过期或不存在，**立即告知用户需要重新登录**，并给出具体步骤：
+   ```
+   iCloud 登录已过期，需要重新登录：
+   请提供你的 Apple ID 邮箱和密码，我来帮你登录。
+   ```
+4. 用户提供凭证后，运行 `python icloud_tool.py login`，如需 2FA 则让用户发验证码，再运行 `python icloud_tool.py verify <验证码>`
+5. **Find My 只能定位 Apple 设备**（iPhone/iPad/Mac/AirTag），无法定位安卓/华为等非 Apple 设备
 
 ---
 
