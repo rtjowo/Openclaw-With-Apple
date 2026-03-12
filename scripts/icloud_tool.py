@@ -194,11 +194,18 @@ def cmd_photos(api, args):
     elif args[0] == 'list':
         limit = int(args[1]) if len(args) > 1 else 10
         library = photos.albums['Library']
-        print(f'📷 最近 {limit} 张照片:\n')
+        print(f'📷 最近 {limit} 张照片（按时间从新到旧）:\n')
+        collected = []
         for i, p in enumerate(library.photos):
             if i >= limit:
                 break
+            collected.append(p)
             print(f'  {i+1:3}. {p.filename:25} | {p.created}')
+        if collected:
+            newest = collected[0].created
+            oldest = collected[-1].created
+            print(f'\n  时间范围: {oldest} ~ {newest}')
+            print(f'  ⚠️ 如果显示的是很久以前的照片，说明 session 可能有问题，请重新登录')
 
     elif args[0] == 'download':
         if len(args) < 2:

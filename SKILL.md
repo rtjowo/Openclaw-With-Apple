@@ -286,6 +286,10 @@ python scripts/generate_tasks_shortcut.py
    ```
 4. 用户提供凭证后，运行 `python icloud_tool.py login`，如需 2FA 则让用户发验证码，再运行 `python icloud_tool.py verify <验证码>`
 5. **Find My 只能定位 Apple 设备**（iPhone/iPad/Mac/AirTag），无法定位安卓/华为等非 Apple 设备
+6. **照片显示异常**：如果 `photos list` 返回的是很久以前的照片（不是最近的），说明 session 或 pyicloud 版本有问题。解决方案：
+   - 确认环境变量 `ICLOUD_CHINA=1` 已设置（中国大陆用户必须）
+   - 重新登录：`python icloud_tool.py login` + `verify`
+   - 检查 pyicloud 版本：`pip install --upgrade pyicloud`
 
 ---
 
