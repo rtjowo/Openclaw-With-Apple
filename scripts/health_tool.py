@@ -1021,10 +1021,7 @@ def generate_health_advice(data, hr_analysis, sleep_analysis):
         if resting > 70 and efficiency < 85:
             cross.append(
                 "夜间心率偏高（{:.0f} bpm）+ 睡眠效率低（{:.1f}%）= "
-                "「身体疲惫但大脑无法放松」。可能处于过度疲劳或慢性压力状态。\n"
-                "  · 睡前 1 小时放下电子设备\n"
-                "  · 尝试渐进式肌肉放松法\n"
-                "  · 持续一周以上考虑咨询医生".format(resting, efficiency)
+                "身体疲惫但大脑无法放松，可能处于过度疲劳或慢性压力状态。".format(resting, efficiency)
             )
 
         if hr_analysis.get("rmssd_est") and hr_analysis["rmssd_est"] < 8 and actual < 6.5:
