@@ -320,9 +320,7 @@ python scripts/generate_tasks_shortcut.py
 
 ### iCloud 相关
 
-> 同样遵守铁律：用户说"看看我的照片""iCloud Drive 里有什么""我手机在哪"，直接运行命令，不要反问"你要看哪个相册？""你要查哪个设备？"——默认用合理的默认值执行。
-
-1. 用户提到日历、照片、文件、设备时，**直接调用对应工具执行**，不要反问
+1. 用户提到日历、照片、文件、设备时，直接调用对应工具执行
 2. **任何 iCloud 操作报错时，必须先运行 `python scripts/icloud_auth.py status` 检查 session 状态**
 3. 如果 session 过期或不存在，**立即告知用户需要重新登录**，并给出具体步骤：
    ```
