@@ -162,13 +162,12 @@ iPhone →「设置」→「快捷指令」→「高级」→ 开启「允许共
 
 ⏰ 第 4 步：设置 iPhone 自动化
 快捷指令 App → 底部「自动化」→ 右上角 + →「特定时间」
-→ 每天 22:00 运行「Health Daily Export」→ 关闭「运行前询问」
-这样每晚 22:00 手机自动采集健康数据，保存到 iCloud Drive/Shortcuts/Health/
+→ 选一个你方便的时间运行「Health Daily Export」→ 关闭「运行前询问」
+例如每天 22:00。手机自动采集健康数据，保存到 iCloud Drive/Shortcuts/Health/
 
 🖥️ 第 5 步：OpenClaw 服务端定时任务
-配置完成后，我会在服务端设置定时任务：
-每晚 22:30 自动从 iCloud Drive/Shortcuts/Health/ 拉取今天的健康数据文件，
-进行深度分析，生成健康报告。
+配置完成后，我会在服务端设置定时任务，定时从 iCloud Drive 拉取健康数据并分析。
+⚠️ 服务端拉取时间必须**晚于**手机采集时间（例如手机 22:00 采集，服务端 22:30 分析）
 
 📊 第 6 步：分析 & 报告
 数据拉取后自动运行分析，输出包含以下内容的健康报告：
@@ -208,7 +207,8 @@ https://www.icloud.com/shortcuts/9054c0236adb4909b3dbf72fa58b4933
 
 ⏰ 第 2 步：设置 iPhone 自动化
 快捷指令 App → 底部「自动化」→ 右上角 + →「特定时间」
-→ 每天 22:15 运行「Tasks Import」→ 关闭「运行前询问」
+→ 选一个时间运行「Tasks Import」→ 关闭「运行前询问」
+⚠️ 这个时间必须**晚于**服务端推送时间（例如服务端 21:00 推送，手机 22:15 导入）
 然后进入 iPhone「设置」→「快捷指令」→「高级」→ 开启「允许共享大量数据」
 
 💡 第 3 步：了解什么内容会被存
@@ -221,10 +221,10 @@ https://www.icloud.com/shortcuts/9054c0236adb4909b3dbf72fa58b4933
 
 🖥️ 第 4 步：服务端如何工作
 我会把识别到的待办存成 JSON 文件（tasks_latest.json），存在服务器中。
-每晚 21:00，服务端自动把这个文件推送到 iCloud Drive/Shortcuts/Tasks/ 中。
+服务端定时自动把这个文件推送到 iCloud Drive/Shortcuts/Tasks/ 中。
 
 📱 第 5 步：手机自动导入
-每晚 22:15，iPhone 自动运行「Tasks Import」快捷指令，
+iPhone 按你设定的时间自动运行「Tasks Import」快捷指令，
 读取 Tasks/ 文件夹中的 JSON，逐条创建为 iPhone「提醒事项」，导入后自动删除文件。
 ```
 
@@ -251,7 +251,8 @@ https://www.icloud.com/shortcuts/56d84868591f4233b7d362c83fb71d59
 
 ⏰ 第 2 步：设置 iPhone 自动化
 快捷指令 App → 底部「自动化」→ 右上角 + →「特定时间」
-→ 每天 22:15 运行「Notes Import」→ 关闭「运行前询问」
+→ 选一个时间运行「Notes Import」→ 关闭「运行前询问」
+⚠️ 这个时间必须**晚于**服务端推送时间（例如服务端 21:00 推送，手机 22:15 导入）
 然后进入 iPhone「设置」→「快捷指令」→「高级」→ 开启「允许共享大量数据」
 
 💡 第 3 步：了解什么内容会被存
@@ -264,10 +265,10 @@ https://www.icloud.com/shortcuts/56d84868591f4233b7d362c83fb71d59
 
 🖥️ 第 4 步：服务端如何工作
 我会把识别到的备忘存成 JSON 文件（notes_latest.json），存在服务器中。
-每晚 21:00，服务端自动把这个文件推送到 iCloud Drive/Shortcuts/Notes/ 中。
+服务端定时自动把这个文件推送到 iCloud Drive/Shortcuts/Notes/ 中。
 
 📱 第 5 步：手机自动导入
-每晚 22:15，iPhone 自动运行「Notes Import」快捷指令，
+iPhone 按你设定的时间自动运行「Notes Import」快捷指令，
 读取 Notes/ 文件夹中的 JSON，合并为一条备忘录（标题为日期），导入后自动删除文件。
 ```
 
@@ -281,9 +282,13 @@ https://www.icloud.com/shortcuts/56d84868591f4233b7d362c83fb71d59
 ✅ 全部配置完成！
 
 你启用的功能：
-  🏥 Apple Health — 每晚 22:00 采集，22:30 自动分析出报告
-  📋 提醒事项 — 行动事项自动存储，每晚 21:00 推送，22:15 手机导入
-  📝 备忘录 — 笔记/想法自动存储，每晚 21:00 推送，22:15 手机导入
+  🏥 Apple Health — iPhone 定时采集，服务端稍后自动分析出报告
+  📋 提醒事项 — 行动事项自动存储，服务端定时推送，iPhone 稍后自动导入
+  📝 备忘录 — 笔记/想法自动存储，服务端定时推送，iPhone 稍后自动导入
+
+⚠️ 时间规则：
+  · 提醒事项/备忘录：iPhone 快捷指令时间 必须晚于 服务端推送时间
+  · 健康分析：服务端拉取时间 必须晚于 iPhone 采集时间
 
 现在你可以正常跟我聊天了，我会自动识别需要记录的内容。
 ```
