@@ -346,7 +346,7 @@ def cmd_sync(args):
 
         # 尝试 session 恢复
         try:
-            from icloud_auth import get_api_with_session
+            from icloud_auth import get_api_with_session, get_cookie_directory
             api = get_api_with_session()
         except Exception:
             username = os.environ.get("ICLOUD_USERNAME")
@@ -354,7 +354,12 @@ def cmd_sync(args):
             if not username or not password:
                 print("❌ 需要 iCloud 凭证。设置 ICLOUD_USERNAME 和 ICLOUD_PASSWORD 环境变量")
                 sys.exit(1)
-            api = PyiCloudService(username, password, china_mainland=True)
+            try:
+                from icloud_auth import get_cookie_directory as _get_cd
+                cookie_dir = _get_cd()
+            except ImportError:
+                cookie_dir = str(Path.home() / ".pyicloud")
+            api = PyiCloudService(username, password, cookie_directory=cookie_dir, china_mainland=True)
 
         drive = api.drive
 

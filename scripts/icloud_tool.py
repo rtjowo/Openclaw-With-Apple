@@ -21,7 +21,9 @@ Apple iCloud 命令行工具（非交互式，适配 AI 环境）
 import sys
 import os
 import json
+import time
 from datetime import datetime
+from pathlib import Path
 
 # 中国大陆用户设置
 if os.environ.get('ICLOUD_CHINA', '1') == '1':
@@ -38,10 +40,21 @@ SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPTS_DIR)
 
 try:
-    from icloud_auth import get_api_with_session, try_restore_session
+    from icloud_auth import get_api_with_session, try_restore_session, get_cookie_directory
     HAS_AUTH_MODULE = True
 except ImportError:
     HAS_AUTH_MODULE = False
+
+
+# ─── Cookie 目录 ───────────────────────────────────────
+
+def _get_cookie_dir():
+    """获取 pyicloud 的 cookie/session 缓存目录"""
+    if HAS_AUTH_MODULE:
+        return get_cookie_directory()
+    default_dir = str(Path.home() / ".pyicloud")
+    os.makedirs(default_dir, exist_ok=True)
+    return default_dir
 
 
 # ─── 认证 ─────────────────────────────────────────────
@@ -51,6 +64,7 @@ def get_api(require_password=False):
     china = os.environ.get('icloud_china') == '1'
     username = os.environ.get('ICLOUD_USERNAME')
     password = os.environ.get('ICLOUD_PASSWORD')
+    cookie_dir = _get_cookie_dir()
 
     if not require_password and HAS_AUTH_MODULE:
         if username:
@@ -79,7 +93,7 @@ def get_api(require_password=False):
             sys.exit(1)
 
     print(f'🍎 正在连接 iCloud{"(中国大陆)" if china else ""}...')
-    api = PyiCloudService(username, password, china_mainland=china)
+    api = PyiCloudService(username, password, cookie_directory=cookie_dir, china_mainland=china)
 
     if api.requires_2fa:
         print("\n🔐 需要双重认证！")
@@ -98,8 +112,54 @@ def cmd_login():
     print("\n✅ 登录成功，session 已缓存。")
 
 
+def _connect_with_retry(username, password, china, cookie_dir, max_retries=3):
+    """
+    带重试的 iCloud 连接。
+    区分 503（Apple 网关临时不可用）和真正的认证失败。
+    返回 (api, error_message)
+    """
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            api = PyiCloudService(
+                username, password,
+                cookie_directory=cookie_dir,
+                china_mainland=china
+            )
+            return api, None
+        except Exception as e:
+            error_str = str(e)
+            last_error = error_str
+
+            # 503 = Apple 网关临时不可用，值得重试
+            if '503' in error_str or 'Service Unavailable' in error_str:
+                if attempt < max_retries:
+                    wait = 5 * attempt  # 5s, 10s, 15s
+                    print(f"⚠️  Apple 服务器暂时不可用 (503)，{wait}s 后重试... ({attempt}/{max_retries})")
+                    time.sleep(wait)
+                    continue
+                else:
+                    return None, (
+                        f"❌ Apple 服务器持续不可用 (503)，已重试 {max_retries} 次。\n"
+                        f"   这是 Apple 网关的临时问题，请几分钟后再试。\n"
+                        f"   原始错误: {error_str}"
+                    )
+
+            # 真正的登录失败（密码错误等），不重试
+            if 'Invalid email/password' in error_str or 'Failed' in error_str:
+                return None, (
+                    f"❌ 登录失败: {error_str}\n"
+                    f"   请检查 ICLOUD_USERNAME 和 ICLOUD_PASSWORD 是否正确。"
+                )
+
+            # 其他未知错误
+            return None, f"❌ 连接失败: {error_str}"
+
+    return None, f"❌ 连接失败: {last_error}"
+
+
 def cmd_verify(args):
-    """验证2FA验证码"""
+    """验证2FA验证码 — 复用 login 阶段的 session cookie，避免触发二次 2FA"""
     if not args:
         print("用法: python icloud_tool.py verify <6位验证码>")
         sys.exit(1)
@@ -117,8 +177,15 @@ def cmd_verify(args):
         print("❌ 未设置 ICLOUD_USERNAME 和 ICLOUD_PASSWORD 环境变量")
         sys.exit(1)
 
-    print(f'🍎 正在连接 iCloud{"(中国大陆)" if china else ""}...')
-    api = PyiCloudService(username, password, china_mainland=china)
+    cookie_dir = _get_cookie_dir()
+
+    # 关键改进：传入 cookie_directory 复用 login 阶段产生的 session cookie
+    # 这样不会触发二次 2FA 弹窗
+    print(f'🍎 正在连接 iCloud{"(中国大陆)" if china else ""}（复用登录会话）...')
+    api, error = _connect_with_retry(username, password, china, cookie_dir)
+    if not api:
+        print(error)
+        sys.exit(1)
 
     if not api.requires_2fa:
         print("✅ 不需要双重认证，已直接连接!")
@@ -126,14 +193,56 @@ def cmd_verify(args):
         return
 
     print(f"🔐 正在验证: {code}")
-    if not api.validate_2fa_code(code):
-        print("❌ 验证码错误!")
+
+    # 验证码提交也加重试（503 可能发生在 validate 阶段）
+    verify_success = False
+    last_verify_error = None
+    for attempt in range(1, 4):
+        try:
+            result = api.validate_2fa_code(code)
+            if result:
+                verify_success = True
+                break
+            else:
+                # validate_2fa_code 返回 False = 验证码错误
+                print("❌ 验证码无效，请确认是最新收到的 6 位数字。")
+                print("   如果刚才手机上弹出了新的验证码，请用新的那个。")
+                sys.exit(1)
+        except Exception as e:
+            error_str = str(e)
+            last_verify_error = error_str
+            if '503' in error_str or 'Service Unavailable' in error_str:
+                if attempt < 3:
+                    wait = 5 * attempt
+                    print(f"⚠️  Apple 服务器暂时不可用 (503)，{wait}s 后重试验证... ({attempt}/3)")
+                    time.sleep(wait)
+                    continue
+                else:
+                    print(f"❌ Apple 服务器持续不可用 (503)，验证码提交失败。")
+                    print(f"   这不是验证码错误，是 Apple 网关问题。请等几分钟后重新运行：")
+                    print(f"   python icloud_tool.py verify {code}")
+                    sys.exit(1)
+            elif 'Invalid email/password' in error_str:
+                # 503 之后 pyicloud 可能误报为密码错误
+                print(f"❌ Apple 返回了认证错误，但这通常是 503 网关问题的后续反应，而非真正的密码错误。")
+                print(f"   请等 1-2 分钟后重试: python icloud_tool.py login")
+                print(f"   原始错误: {error_str}")
+                sys.exit(1)
+            else:
+                print(f"❌ 验证过程中出错: {error_str}")
+                sys.exit(1)
+
+    if not verify_success:
+        print(f"❌ 验证失败: {last_verify_error}")
         sys.exit(1)
 
     print("✅ 验证成功!")
     if not api.is_trusted_session:
-        api.trust_session()
-        print("✅ 已信任此设备会话")
+        try:
+            api.trust_session()
+            print("✅ 已信任此设备会话")
+        except Exception as e:
+            print(f"⚠️  信任会话时出错（不影响使用）: {e}")
 
     # 关键：重新认证以刷新所有 service endpoints（照片、Drive 等）
     print("🔄 正在初始化所有 iCloud 服务...")
