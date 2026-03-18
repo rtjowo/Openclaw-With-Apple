@@ -205,7 +205,6 @@ python scripts/setup_tasks_cron.py install
 用 iPhone Safari 打开以下链接，点击「添加快捷指令」：
 https://www.icloud.com/shortcuts/9054c0236adb4909b3dbf72fa58b4933
 ⚠️ 必须用 iPhone Safari 打开，电脑上打不开！
-导入后手动运行一次（首次运行会在 iCloud Drive 中创建 Shortcuts/Tasks/ 文件夹）。
 
 ⏰ 第 2 步：设置 iPhone 自动化
 快捷指令 App → 底部「自动化」→ 右上角 + →「特定时间」
@@ -249,7 +248,6 @@ iPhone 按你设定的时间自动运行「Tasks Import」快捷指令，
 用 iPhone Safari 打开以下链接，点击「添加快捷指令」：
 https://www.icloud.com/shortcuts/56d84868591f4233b7d362c83fb71d59
 ⚠️ 必须用 iPhone Safari 打开，电脑上打不开！
-导入后手动运行一次（首次运行会在 iCloud Drive 中创建 Shortcuts/Notes/ 文件夹）。
 
 ⏰ 第 2 步：设置 iPhone 自动化
 快捷指令 App → 底部「自动化」→ 右上角 + →「特定时间」
