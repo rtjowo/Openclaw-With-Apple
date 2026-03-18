@@ -79,7 +79,7 @@ export ICLOUD_APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
 python icloud_calendar.py list    # 验证日历
 ```
 
-验证成功后进入第二步。
+验证成功后，日历功能即可使用。如果用户后续需要提醒事项/备忘录/健康分析，再补充 Apple ID 邮箱 + 主密码即可。
 
 #### 用户提供了邮箱 + 主密码：
 
