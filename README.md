@@ -60,7 +60,7 @@ pip install pyicloud caldav icalendar
 
 无需密码，iPhone 导入快捷指令即可：
 
-https://www.icloud.com/shortcuts/4a5dff0072a6463a9a1fef47d6ec13e2
+https://www.icloud.com/shortcuts/94862224a4b64ca0bf037b89c8f81cb7
 
 分析内容：
 - **心率**：夜间静息心率、HRV (RMSSD)、心率突变检测、昼夜差异
