@@ -26,6 +26,7 @@ iCloud 路径: iCloud Drive/Shortcuts/Tasks/tasks.json
 
 import json
 import os
+import re
 import sys
 import shutil
 import uuid
@@ -126,10 +127,25 @@ def cmd_add(args):
     title = args[0]
     opts = _parse_opts(args[1:])
 
+    resolved_date = _resolve_date(opts.get("date"))
+
+    # 自动在 title 前加日期前缀（X月X日 格式）
+    # 因为 iPhone 快捷指令无法读取提醒事项的 date 字段，用户只能看到 title 文本
+    # 所以当有 date 时，必须把日期写进 title 里
+    if resolved_date and opts.get("target", "reminder") == "reminder":
+        try:
+            dt = datetime.strptime(resolved_date, "%Y-%m-%d")
+            date_prefix = f"{dt.month}月{dt.day}日"
+            # 避免重复添加：检查 title 是否已经以 "X月X日" 开头
+            if not re.match(r'^\d{1,2}月\d{1,2}日', title):
+                title = f"{date_prefix} {title}"
+        except ValueError:
+            pass
+
     task = {
         "id": _gen_id(),
         "title": title,
-        "date": _resolve_date(opts.get("date")),
+        "date": resolved_date,
         "time": opts.get("time"),
         "priority": opts.get("priority", "medium"),
         "notes": opts.get("notes", ""),
