@@ -388,16 +388,16 @@ iPhone 按你设定的时间自动运行「Notes Import」快捷指令，
 ### iCloud 相关
 
 1. 用户提到日历、照片、文件、设备时，直接调用对应工具执行
-2. **任何 iCloud 操作报错时，必须先运行 `python scripts/icloud_auth.py status` 检查 session 状态**
-3. 如果 session 过期或不存在，**立即告知用户需要重新登录**，并给出具体步骤：
-   ```
-   iCloud 登录已过期，需要重新登录：
-   请提供你的 Apple ID 邮箱和密码，我来帮你登录。
-   ```
-4. 用户提供凭证后，运行 `python icloud_tool.py login`，如需 2FA 则让用户发验证码，再运行 `python icloud_tool.py verify <验证码>`
-5. **2FA 验证失败时**：如果 verify 命令输出 503 相关错误，**不要告诉用户密码错误**，应该说"Apple 服务器暂时繁忙，请等 1-2 分钟后重试"。脚本已内置自动重试，大多数情况下会自动恢复
-6. **Find My 只能定位 Apple 设备**（iPhone/iPad/Mac/AirTag），无法定位安卓/华为等非 Apple 设备
-6. **照片显示异常**：如果 `photos list` 返回的是很久以前的照片（不是最近的），说明 session 或 pyicloud 版本有问题。解决方案：
+2. **任何 iCloud 操作报错（含 session 过期）时，按以下顺序自动处理，不要卡住**：
+   - **第一步**：检查环境变量 `ICLOUD_USERNAME` 和 `ICLOUD_PASSWORD` 是否已设置
+   - **如果已设置** → 直接执行 `python scripts/icloud_tool.py login`，不要再问用户要密码
+   - **如果未设置** → 告知用户 session 过期，请求提供 Apple ID 邮箱和主密码
+   - **如果 login 触发 2FA**（退出码 2）→ 立刻告知用户查看 iPhone 验证码弹窗
+   - **用户发来验证码后** → 立刻执行 `python scripts/icloud_tool.py verify <验证码>`
+   - ⛔ **严禁行为**：检测到 session 过期后只打印错误信息就停下来，必须立即尝试重新登录
+3. **2FA 验证失败时**：如果 verify 命令输出 503 相关错误，**不要告诉用户密码错误**，应该说"Apple 服务器暂时繁忙，请等 1-2 分钟后重试"。脚本已内置自动重试，大多数情况下会自动恢复
+4. **Find My 只能定位 Apple 设备**（iPhone/iPad/Mac/AirTag），无法定位安卓/华为等非 Apple 设备
+5. **照片显示异常**：如果 `photos list` 返回的是很久以前的照片（不是最近的），说明 session 或 pyicloud 版本有问题。解决方案：
    - 确认环境变量 `ICLOUD_CHINA=1` 已设置（中国大陆用户必须）
    - 重新登录：`python icloud_tool.py login` + `verify`
    - 检查 pyicloud 版本：`pip install --upgrade pyicloud`
