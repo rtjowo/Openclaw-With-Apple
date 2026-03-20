@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""配置 macOS launchd 定时任务 — 每晚 22:00 自动同步待办到 iCloud。
+"""配置 macOS launchd 定时任务 — 每晚自动同步待办到 iCloud。
 
 用法:
-  python setup_tasks_cron.py install    # 安装定时任务
-  python setup_tasks_cron.py uninstall  # 卸载定时任务
-  python setup_tasks_cron.py status     # 查看状态
+  python setup_tasks_cron.py install                 # 安装定时任务（默认每晚 21:00）
+  python setup_tasks_cron.py install --hour 22       # 安装定时任务（每晚 22:00）
+  python setup_tasks_cron.py install --hour 21 --minute 30  # 每晚 21:30
+  python setup_tasks_cron.py uninstall               # 卸载定时任务
+  python setup_tasks_cron.py status                  # 查看状态
 
 原理:
   在 ~/Library/LaunchAgents/ 创建 plist 文件,
-  macOS 的 launchd 系统在每天 22:00 自动执行:
+  macOS 的 launchd 系统在设定时间自动执行:
     python3 /path/to/scripts/tasks_tool.py sync
 """
 
@@ -37,7 +39,7 @@ def _find_python():
     return "python3"
 
 
-def _generate_plist(python_path):
+def _generate_plist(python_path, hour=21, minute=0):
     """生成 launchd plist XML。"""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -56,9 +58,9 @@ def _generate_plist(python_path):
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>22</integer>
+        <integer>{hour}</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>{minute}</integer>
     </dict>
 
     <key>StandardOutPath</key>
@@ -81,7 +83,7 @@ def _generate_plist(python_path):
 """
 
 
-def install():
+def install(hour=21, minute=0):
     """安装 launchd 定时任务。"""
     python_path = _find_python()
     print(f"🐍 Python: {python_path}")
@@ -94,7 +96,7 @@ def install():
     os.makedirs(PLIST_DIR, exist_ok=True)
     os.makedirs(LOG_DIR, exist_ok=True)
 
-    plist_content = _generate_plist(python_path)
+    plist_content = _generate_plist(python_path, hour, minute)
 
     # 如果已存在，先卸载
     if os.path.exists(PLIST_PATH):
@@ -106,8 +108,9 @@ def install():
 
     result = subprocess.run(["launchctl", "load", PLIST_PATH], capture_output=True, text=True)
     if result.returncode == 0:
+        time_str = f"{hour:02d}:{minute:02d}"
         print(f"✅ 定时任务已安装")
-        print(f"   每天 22:00 自动同步待办到 iCloud Drive")
+        print(f"   每天 {time_str} 自动同步待办到 iCloud Drive")
         print(f"   日志: {LOG_DIR}/tasks-sync.log")
         print(f"   配置: {PLIST_PATH}")
         print(f"\n💡 注意: 需要确保 ICLOUD_USERNAME 和 ICLOUD_PASSWORD 环境变量已设置")
@@ -156,11 +159,28 @@ def status():
 def main():
     if len(sys.argv) < 2:
         print("用法: python setup_tasks_cron.py [install|uninstall|status]")
+        print("  install [--hour H] [--minute M]  安装定时任务（默认 21:00）")
+        print("  uninstall                        卸载定时任务")
+        print("  status                           查看状态")
         sys.exit(0)
 
     cmd = sys.argv[1]
     if cmd == "install":
-        install()
+        # 解析 --hour 和 --minute 参数
+        hour = 21
+        minute = 0
+        args = sys.argv[2:]
+        i = 0
+        while i < len(args):
+            if args[i] == "--hour" and i + 1 < len(args):
+                hour = int(args[i + 1])
+                i += 2
+            elif args[i] == "--minute" and i + 1 < len(args):
+                minute = int(args[i + 1])
+                i += 2
+            else:
+                i += 1
+        install(hour, minute)
     elif cmd == "uninstall":
         uninstall()
     elif cmd == "status":
