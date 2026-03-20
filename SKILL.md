@@ -96,7 +96,24 @@ python icloud_calendar.py list    # 验证日历
 不需要的话，现在就可以开始用日历了。
 ```
 
-#### 用户提供了邮箱 + 主密码：
+#### 用户同时提供了应用专用密码 + 邮箱 + 主密码（三样都给了）：
+
+**必须两个都登录**，不能只登日历就停下来！
+
+```bash
+# 1. 先连接日历
+export ICLOUD_APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+python icloud_calendar.py list    # 验证日历
+
+# 2. 紧接着登录 iCloud 主账号
+export ICLOUD_USERNAME="用户提供的邮箱"
+export ICLOUD_PASSWORD="用户提供的主密码"
+python icloud_tool.py login       # 登录 iCloud（如需 2FA 退出码为 2）
+```
+
+两个都验证完成后，再进入第二步。
+
+#### 用户提供了邮箱 + 主密码（没给应用专用密码）：
 
 AI 直接通过环境变量设置凭证并登录，**全程非交互式**：
 
