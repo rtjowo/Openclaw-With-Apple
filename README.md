@@ -45,8 +45,8 @@ pip install pyicloud caldav icalendar
 
 **iPhone 快捷指令**（用 Safari 打开）：
 
-- **Tasks Import**：https://www.icloud.com/shortcuts/9054c0236adb4909b3dbf72fa58b4933
-- **Notes Import**：https://www.icloud.com/shortcuts/56d84868591f4233b7d362c83fb71d59
+- **Tasks Import**：https://www.icloud.com/shortcuts/de68c5443f054355bdb332f246c24a94
+- **Notes Import**：https://www.icloud.com/shortcuts/2229591d96a849a6ad9b4e44b4b6ce80
 
 ### 数据流
 
