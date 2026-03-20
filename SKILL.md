@@ -383,7 +383,11 @@ iPhone 按你设定的时间自动运行「Notes Import」快捷指令，
 3. **分析命令**：`python scripts/health_tool.py analyze <file>` 或 `python scripts/health_tool.py today`
 4. **用户主动询问**：随时可以问健康相关问题，AI 自动读取对应日期的数据分析
 5. **多日趋势**：`python scripts/health_tool.py report <dir> --days 7`
-6. **输出规则（重要）**：`health_tool.py` 输出的「💡 深度分析与个性化建议」部分（交叉关联、综合评定、睡眠分析等）**必须原样呈现给用户，禁止 AI 自行二次总结或精简**。用户喜欢判定性语句（如"HRV 低 + 睡眠不足 = 恢复能力严重受损"），不要把这些内容吞掉。
+6. **必须使用 health_tool.py（最重要）**：
+   - ⛔ **严禁 AI 自己看原始数据后手写健康报告**。AI 没有 health_tool.py 那样的 1400 行深度分析能力（HRV 计算、睡眠周期分析、交叉关联等），手写出来的报告会非常简陋
+   - ✅ **必须运行 `python scripts/health_tool.py today` 或 `python scripts/health_tool.py analyze <file>`**，让脚本输出完整报告
+   - ✅ 脚本输出的所有内容（基础指标、心率详细、睡眠详细、深度分析、交叉关联、综合评定）**必须原样呈现给用户，禁止 AI 自行二次总结或精简**
+   - 用户喜欢判定性语句（如"HRV 低 + 睡眠不足 = 恢复能力严重受损"），这些是 health_tool.py 的核心价值，不要把它们吞掉
 
 ### iCloud 相关
 
