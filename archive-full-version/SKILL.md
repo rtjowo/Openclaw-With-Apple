@@ -187,7 +187,7 @@ python scripts/setup_tasks_cron.py install
 
 📱 第 1 步：导入快捷指令
 用 iPhone Safari 打开以下链接，点击「添加快捷指令」：
-https://www.icloud.com/shortcuts/9054c0236adb4909b3dbf72fa58b4933
+https://www.icloud.com/shortcuts/de68c5443f054355bdb332f246c24a94
 ⚠️ 必须用 iPhone Safari 打开，电脑上打不开！
 导入后手动运行一次（首次运行会在 iCloud Drive 中创建 Shortcuts/Tasks/ 文件夹）。
 
@@ -230,7 +230,7 @@ https://www.icloud.com/shortcuts/9054c0236adb4909b3dbf72fa58b4933
 
 📱 第 1 步：导入快捷指令
 用 iPhone Safari 打开以下链接，点击「添加快捷指令」：
-https://www.icloud.com/shortcuts/56d84868591f4233b7d362c83fb71d59
+https://www.icloud.com/shortcuts/2229591d96a849a6ad9b4e44b4b6ce80
 ⚠️ 必须用 iPhone Safari 打开，电脑上打不开！
 导入后手动运行一次（首次运行会在 iCloud Drive 中创建 Shortcuts/Notes/ 文件夹）。
 
